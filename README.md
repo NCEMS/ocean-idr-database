@@ -39,8 +39,6 @@
 
 * After you open the terminal session, type or copy the command `git clone https://github.com/NCEMS/ocean-idr-database.git` onto the command line and hit enter.
 
-* You will be prompted for your GitHub username and password. In the password field, paste the token your created
-
 * Run the command `cd ocean-idr-database/` and then proceed to step 3
 
 ### 3. Configuring `gocmd` and getting the database file
