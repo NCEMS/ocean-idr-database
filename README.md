@@ -47,7 +47,7 @@
 
 * First, run the command `sudo gocmd upgrade`
 
-* Second, run the command `gocmd init`. You will be prompted for four pieces of information:
+* Second, run the command `gocmd init`. You will be prompted for five pieces of information:
   * (1) `iRODS Host [data.cyverse.org]`: hit enter to accept the default of `data.cyverse.org`
   * (2) `iRODS Port [1247]`: hit enter to accept the default of `1247`
   * (3) `iRODS Zone [iplant]`: hit enter to accept the default of `iplant`
