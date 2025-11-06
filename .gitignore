@@ -1,0 +1,4 @@
+.ipynb_checkpoints
+python-scripts/__pycache__
+minimal_noenv.db
+minimal_noenv.db.gz
