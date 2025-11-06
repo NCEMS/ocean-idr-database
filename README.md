@@ -20,7 +20,7 @@
 * (1) "Analysis Info" - on this screen, just click the `Next` button in the bottom righthand corner
 ![Analysis Info page](images/analysis-info.png)
 
-* (2) "Advanced Settings" - here we need to select the computational resources for the job. Select `CPU Cores = 4`, `Minimum Memory = 16.0 GiB`, and `Minimum Disk Space = 64 GB` using the dropdown menus. 
+* (2) "Advanced Settings" - here we need to select the computational resources for the job. Select `CPU Cores = 4`, `Minimum Memory = 16.0 GiB`, and `Minimum Disk Space = 64 GB` using the dropdown menus and then click `Next`. 
 ![Advanced Settings page](images/advanced-settings.png)
 
 * (3) "Review and Launch" - click the `Launch Analysis` button in the bottom righthand corner of the screen
