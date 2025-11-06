@@ -47,10 +47,15 @@
 
 * First, run the command `sudo gocmd upgrade`
 
-* Second, run the command `gocmd init`. You may be prompted to input your CyVerse username and/or password (it will say iRODs username/password, but this is the same as your CyVerse username/password).
+* Second, run the command `gocmd init`. You will be prompted for four pieces of information:
+  * (1) `iRODS Host [data.cyverse.org]`: hit enter to accept the default of `data.cyverse.org`
+  * (2) `iRODS Port [1247]`: hit enter to accept the default of `1247`
+  * (3) `iRODS Zone [iplant]`: hit enter to accept the default of `iplant`
+  * (4) `iRODS Username`: type in your CyVerse username and then hit enter
+  * (5) `iRODS Password`: type in your CyVerse password and then hit enter. Note well: you will not see your password or asterisks representing the characters you have entered, but your keystrokes are being recorded. 
 
-* Third, run the command `gocmd get --progress /iplant/home/shared/NCEMS/working-groups/oceans-of-disorder/minimal-database/minimal_noenv.db.gz .` to copy the data 
+* Third, run the command `gocmd get --progress /iplant/home/shared/NCEMS/working-groups/oceans-of-disorder/minimal-database/minimal_noenv.db.gz .` to copy the data into your present working directory. 
 
-* Finally unpack the database by running the command `gunzip minimal_noenv.db.gz`
+* Finally, unpack the database by running the command `gunzip minimal_noenv.db.gz`; this may take up to 5 minutes
 
 ### 4. Making a query
