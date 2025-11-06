@@ -7,14 +7,20 @@
 1. Kicking off a CyVerse session
 
 * Navigate to `de.cyverse.org` on your preferred web browser
-* On the navigation meno on the left, click the `Apps` tab
+* On the navigation menu on the left, click the `Apps` tab
 * Click on `JupyterLab Datascience` to start the process of launching a session
+![Apps menu page](images/Apps-menu.png)
 * You will now need to navigate a series of screens to choose your parameters and launch the session:
 * (1) "Analysis Info" - on this screen, just click the `Next` button in the bottom righthand corner
+![Analysis Info page](images/analysis-info.png)
 * (2) "Advanced Settings" - here we need to select the computational resources for the job. Select `CPU Cores = 4`, `Minimum Memory = 16.0 GiB`, and `Minimum Disk Space = 64 GB` using the dropdown menus. 
+![Advanced Settings page](images/advanced-settings.png)
 * (3) "Review and Launch" - click the `Launch Analysis` button in the bottom righthand corner of the screen
+![Review and Launch](images/review-and-launch.png)
 * (4) On the next screen, hit `Go to Analysis` at the top
+![Go to Analysis](images/go-to-analysis.png)
 * You should now see a loading bar like the one below. It may take a few minutes to get your resources set up. If it stalls, try refreshing the page. 
+![Launching the app](images/launching-app.png)
 
 2. Clone the repository
 
