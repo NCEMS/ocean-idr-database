@@ -316,15 +316,24 @@ def create_omrgcv2_temp_ui():
     """
     UI for:
       - omrgcv2 only
+      - OPTIONAL COG ID filter
       - select IDR properties
       - select min/max temperature thresholds
-      - compare proteins uniquely below min vs uniquely above max
+      - compare proteins uniquely in cold vs warm bins
     """
     instructions = widgets.HTML(
         "<b>Instructions:</b> "
-        "1) Select IDR properties.<br>"
-        "2) Enter a minimum and maximum temperature (°C).<br>"
-        "3) Click <i>'Run temperature-based query'</i> to compare IDRs from cold vs warm bins."
+        "1) (Optional) Enter a COG ID to restrict the analysis.<br>"
+        "2) Select IDR properties.<br>"
+        "3) Enter a minimum and maximum temperature (°C).<br>"
+        "4) Click <i>'Run temperature-based query'</i>."
+    )
+
+    # ---- Optional COG ID input ----
+    cog_input = widgets.Text(
+        description="COG ID:",
+        placeholder="(leave blank for all COGs)",
+        layout=widgets.Layout(width="260px")
     )
 
     # ---- IDR property selection ----
@@ -365,22 +374,19 @@ def create_omrgcv2_temp_ui():
         with output:
             clear_output()
 
-            # 1) Read selected properties
-            selected_props = [
-                cb.description for cb in prop_checkboxes if cb.value
-            ]
+            # 1) Selected properties
+            selected_props = [cb.description for cb in prop_checkboxes if cb.value]
             if not selected_props:
                 print("Please select at least one IDR property.")
                 return
 
-            # 2) Validate properties
             try:
                 check_idr_props_list(selected_props)
             except ValueError as e:
                 print(e)
                 return
 
-            # 3) Get temperature thresholds
+            # 2) Temperatures
             try:
                 min_T = float(min_temp_input.value)
                 max_T = float(max_temp_input.value)
@@ -392,42 +398,48 @@ def create_omrgcv2_temp_ui():
                 print("Minimum temperature must be less than maximum temperature.")
                 return
 
-            # 4) Run base query (omrgcv2 only, already joined)
+            # 3) Base query: omrgcv2 only + joins
             df = query_omrgcv2_with_temps()
-
             if df is None or df.empty:
                 print("No records found for omrgcv2 with temperatures.")
                 return
 
-            # 5) Clean duplicated columns
             df = df.loc[:, ~df.columns.duplicated()].copy()
 
-            # 6) Ensure required temperature columns exist
-            # Adjust names here if your tara_temperatures schema differs
+            # 4) Optional COG filter
+            cog_id = cog_input.value.strip()
+            if cog_id:
+                if "cog_root_ids" not in df.columns:
+                    print("COG filter requested, but 'cog_root_ids' column not found.")
+                    return
+                df = df[df["cog_root_ids"] == cog_id].copy()
+                if df.empty:
+                    print(f"No records found for omrgcv2 with COG ID '{cog_id}'.")
+                    return
+
+            # 5) Check temperature columns
+            # Adjust names here if your tara_temperatures table uses different ones
             temp_cols = ["min_temperature", "max_temperature"]
             for col in temp_cols:
                 if col not in df.columns:
-                    print(f"Expected temperature column '{col}' not found in joined table.")
+                    print(f"Expected temperature column '{col}' not found.")
                     return
 
-            # 7) Coerce temps to numeric
             for col in temp_cols:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
-            # Drop rows with missing temps
             df = df.dropna(subset=temp_cols)
             if df.empty:
                 print("No entries with valid min_T and max_T after cleaning.")
                 return
 
-            # 8) Define the two disjoint groups:
-            #    - "below_min": proteins whose entire observed range is < min_T  (max_T < min_T)
-            #    - "above_max": proteins whose entire observed range is > max_T (min_T > max_T)
+            # 6) Define disjoint bins:
+            # cold-only: max_T < min_T_threshold
+            # warm-only: min_T > max_T_threshold
             below_min_df = df[df["max_temperature"] < min_T].copy()
             above_max_df = df[df["min_temperature"] > max_T].copy()
 
-            # Keep only proteins uniquely in one bin (disjoint sets)
-            # (If the same Gene somehow satisfies both, this removes overlaps.)
+            # Ensure uniqueness if needed (by Gene)
             if "Gene" in df.columns:
                 below_genes = set(below_min_df["Gene"])
                 above_genes = set(above_max_df["Gene"])
@@ -437,53 +449,68 @@ def create_omrgcv2_temp_ui():
                     above_max_df = above_max_df[~above_max_df["Gene"].isin(overlap)]
 
             if below_min_df.empty and above_max_df.empty:
-                print(
-                    "No proteins found with max_T < Min T or min_T > Max T.\n"
-                    "Try adjusting your temperature thresholds."
+                msg = (
+                    "No proteins found that are uniquely in cold (< {min_T}°C) or "
+                    "warm (> {max_T}°C) bins."
                 )
+                print(msg.format(min_T=min_T, max_T=max_T))
                 return
 
-            # 9) Tag groups
-            below_min_df["temp_bin"] = f"< {min_T}°C"
-            above_max_df["temp_bin"] = f"> {max_T}°C"
+            # 7) Label bins
+            if not below_min_df.empty:
+                below_min_df["temp_bin"] = f"< {min_T}°C"
+            if not above_max_df.empty:
+                above_max_df["temp_bin"] = f"> {max_T}°C"
 
             combined = pd.concat(
-                [df_ for df_ in [below_min_df, above_max_df] if not df_.empty],
+                [d for d in (below_min_df, above_max_df) if not d.empty],
                 ignore_index=True
             )
 
-            # 10) Coerce selected IDR properties to numeric
+            # 8) Coerce selected IDR props to numeric
             for col in selected_props:
                 if col in combined.columns:
                     combined[col] = pd.to_numeric(combined[col], errors="coerce")
 
-            # 11) Report and preview
-            print("Temperature-based groups (omrgcv2 only):\n")
+            # 9) Report + preview
+            title_bits = []
+            if cog_id:
+                title_bits.append(f"COG ID = {cog_id}")
+            title_bits.append("dataset = omrgcv2")
+            print("Filtered on " + ", ".join(title_bits) + "\n")
+
             if not below_min_df.empty:
-                print(f"  Proteins only in cold bin (< {min_T}°C): {len(below_min_df)}")
+                print(f"Proteins only in cold bin (< {min_T}°C): {len(below_min_df)}")
             if not above_max_df.empty:
-                print(f"  Proteins only in warm bin (> {max_T}°C): {len(above_max_df)}")
+                print(f"Proteins only in warm bin (> {max_T}°C): {len(above_max_df)}")
             print()
-            display(combined[["Gene", "temp_bin"] + selected_props].head())
 
-            # 12) Plot comparison of selected properties between temp bins
-            if "temp_bin" in combined.columns:
-                try:
-                    plot_idr_property_boxplots2(
-                        combined,
-                        properties=selected_props,
-                        group_col="temp_bin"
-                    )
-                except Exception as e:
-                    print("\nPlotting error:", e)
+            cols_to_show = []
+            for c in ["Gene", "cog_root_ids", "temp_bin"]:
+                if c in combined.columns:
+                    cols_to_show.append(c)
+            cols_to_show += [c for c in selected_props if c in combined.columns]
 
-            # 13) Store for export
+            display(combined[cols_to_show].head())
+
+            # 10) Plots: compare selected props across temp bins
+            try:
+                plot_idr_property_boxplots2(
+                    combined,
+                    properties=selected_props,
+                    group_col="temp_bin"
+                )
+            except Exception as e:
+                print("\nPlotting error:", e)
+
+            # 11) Store for export
             LAST_RESULTS = combined
 
     run_button.on_click(on_run_clicked)
 
     ui = widgets.VBox([
         instructions,
+        cog_input,
         widgets.HTML("<b>Select IDR properties:</b>"),
         props_box,
         widgets.HBox([min_temp_input, max_temp_input]),
