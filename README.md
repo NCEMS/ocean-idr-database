@@ -59,3 +59,22 @@
 * Finally, unpack the database by running the command `gunzip minimal_noenv.db.gz`; this may take up to 5 minutes
 
 ### 4. Making a query
+
+* The file explorer on the left does not synchronize itself with your terminal session, so we first need to enter the repository root directory by double clicking on `ocean-idr-database`
+![Enter repo directory](images/enter-repo-directory.png)
+
+* You should now see two directories and three files in the file explorer:
+  * `images`: folder containing the images rendered in this README
+  * `python-scripts`: folder containing the Python code loaded by `query-database.ipynb` to enable its functionality
+  * `minimal_noenv.db`: the SQLite database file we will query
+  * `query-database.ipynb`: the Jupyter Notebook file we will use to carry out a query
+  * `README.md`: the README file you are reading now
+
+* Double click on `query-database.ipynb` in the file explorer bar to open it
+
+* Follow the instructions in the notebook itself to run your query and save the results to a .csv file. 
+
+* Critical note: when you close your CyVerse session, all code and data in your working directory will be deleted forever. It is critical that you download your results to your local machine or copy them to your personal CyVerse storage if you want to use them again
+  * You can download a file by right clicking on its name in the file explorer bar on the left and selecting `Download` from the dropdown menu
+  * You can also use `gocmd` to copy data to your personal CyVerse storage. For example, if you have the output file `COG0513.csv` in your present working directory, you can run the command `gocmd put --progress COG0513.csv /iplant/home/{USERNAME}`, where you must replace `{USERNAME}` with your CyVerse username
+
