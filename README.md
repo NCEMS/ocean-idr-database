@@ -1,3 +1,8 @@
+### TO DO LIST
+
+1. Add IDR length filter
+2. Add Tara temperature filter to global comparison set
+
 # Query the ocean IDR database
 
 * This GitHub repository enables easy searching of the SQLite database `minimal_noenv.db` using a Jupyter notebook.
