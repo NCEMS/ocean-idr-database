@@ -53,42 +53,30 @@ def run_query(query: str, params: tuple = ()) -> pd.DataFrame:
         return pd.read_sql_query(query, conn, params=params)
 
 def query_by_cog_root(cog_root_value: str) -> pd.DataFrame:
-    query = """
-    SELECT
-        a.*,
-        i.*,
-        c.cog_root_ids
-    FROM architecture AS a
-    JOIN idr_props AS i
-        ON a.Gene = i.Gene
-    JOIN cog_root AS c
-        ON a.Gene = c.Gene
-    WHERE c.cog_root_ids = ?
     """
-    return run_query(query, (cog_root_value,))
+    Return architecture + idr_props + cog_root for a given COG,
+    with optional Tara Oceans temperature data joined when available.
 
-def query_omrgcv2_with_temps() -> pd.DataFrame:
-    """
-    Join architecture, idr_props, cog_root, and tara_temperatures
-    for entries from the omrgcv2 dataset only.
+    Temperature info (min_temperature, max_temperature) is only present
+    for omrgcv2 entries in the tara_temperature table.
     """
     query = """
     SELECT
         a.*,
         i.*,
         c.cog_root_ids,
-        t.*
+        t.min_temperature,
+        t.max_temperature
     FROM architecture AS a
     JOIN idr_props AS i
         ON a.Gene = i.Gene
     JOIN cog_root AS c
         ON a.Gene = c.Gene
-    JOIN tara_temperatures AS t
+    LEFT JOIN tara_temperatures AS t
         ON a.Gene = t.Gene
-    WHERE a.dataset = 'omrgcv2'
+    WHERE c.cog_root_ids = ?
     """
-    return run_query(query)
-
+    return run_query(query, (cog_root_value,))
 
 def check_idr_props_list(user_props: List[str]) -> None:
     invalid = [p for p in user_props if p not in MASTER_IDR_PROPS]
@@ -170,11 +158,15 @@ def create_idr_ui():
     """Build and return the full interactive UI as a widget container."""
 
     instructions = widgets.HTML(
-        "<b>Instructions:</b> "
-        "1) Enter a COG ID. "
-        "2) Select dataset(s). "
-        "3) Select IDR properties. "
-        "4) Click <i>'Run query and plot'</i>."
+        "<b>Instructions:</b><br>"
+        "1) Enter a COG ID. <br>"
+        "2) Select dataset(s). <br>"
+        "3) (Optional) Set a minimum IDR length. <br>"
+        "4) (Optional) Filter by architecture (comma-separated; each must be 'IDR'/'ORDERED' combos, e.g. 'IDR-ORDERED-IDR').<br>"
+        "5) (Optional) For Tara Oceans (omrgcv2), set Min/Max temperature to define two bins:<br>"
+        "&nbsp;&nbsp;&nbsp;&nbsp;Cold: max_temperature &lt; Min T; Warm: min_temperature &gt; Max T (others dropped for omrgcv2).<br>"
+        "6) Select IDR properties. <br>"
+        "7) Click <i>'Run query and plot'</i>."
     )
 
     # ---- COG ID input ----
@@ -194,6 +186,32 @@ def create_idr_ui():
         for ds in DATASET_OPTIONS
     ]
     dataset_box = widgets.VBox(dataset_checkboxes)
+
+    # ---- Min IDR length filter (optional) ----
+    idr_length_input = widgets.IntText(
+        description="Min IDR len:",
+        value=0,
+        layout=widgets.Layout(width="200px")
+    )
+
+    # ---- Architecture filter (optional, comma-separated) ----
+    arch_input = widgets.Text(
+        description="Architectures:",
+        placeholder="e.g. IDR-ORDERED, ORDERED-IDR",
+        layout=widgets.Layout(width="400px")
+    )
+
+    # ---- Temperature filter inputs for omrgcv2 (optional) ----
+    min_temp_input = widgets.Text(
+        description="Min T (°C):",
+        placeholder="optional",
+        layout=widgets.Layout(width="200px")
+    )
+    max_temp_input = widgets.Text(
+        description="Max T (°C):",
+        placeholder="optional",
+        layout=widgets.Layout(width="200px")
+    )
 
     # ---- IDR property selection ----
     prop_checkboxes = [
@@ -215,19 +233,70 @@ def create_idr_ui():
 
     output = widgets.Output()
 
+    # ---- Helpers ----
+
+    def parse_and_validate_arch_list(raw: str):
+        text = raw.strip()
+        if not text:
+            return [], None  # no filter
+
+        raw_items = [item.strip() for item in text.split(",")]
+        archs = [a for a in raw_items if a]
+
+        if not archs:
+            return [], None
+
+        valid_archs = []
+        invalid_archs = []
+
+        for arch in archs:
+            parts = arch.upper().split("-")
+            if parts and all(p in ("IDR", "ORDERED") for p in parts):
+                valid_archs.append("-".join(parts))
+            else:
+                invalid_archs.append(arch)
+
+        if invalid_archs:
+            msg = (
+                "Invalid architecture value(s): "
+                + ", ".join(invalid_archs)
+                + ". Each must be combinations of 'IDR' and 'ORDERED' joined by '-', "
+                  "e.g. IDR, ORDERED, IDR-ORDERED-IDR."
+            )
+            return None, msg
+
+        # Deduplicate, preserve order
+        seen = set()
+        uniq = []
+        for a in valid_archs:
+            if a not in seen:
+                seen.add(a)
+                uniq.append(a)
+
+        return uniq, None
+
+    def parse_float_or_none(s: str):
+        s = str(s).strip()
+        if not s:
+            return None
+        try:
+            return float(s)
+        except ValueError:
+            return None
+
     # ---- Callback ----
     def on_run_clicked(b):
         global LAST_RESULTS
         with output:
             clear_output()
 
-            # 1. Get COG ID
+            # 1. COG ID
             cog_id = cog_input.value.strip()
             if not cog_id:
                 print("Please enter a COG ID.")
                 return
 
-            # 2. Get selected datasets
+            # 2. Datasets
             selected_datasets = [
                 cb.description for cb in dataset_checkboxes if cb.value
             ]
@@ -235,7 +304,7 @@ def create_idr_ui():
                 print("Please select at least one dataset.")
                 return
 
-            # 3. Get selected IDR properties
+            # 3. IDR properties
             selected_props = [
                 cb.description for cb in prop_checkboxes if cb.value
             ]
@@ -243,58 +312,261 @@ def create_idr_ui():
                 print("Please select at least one IDR property.")
                 return
 
-            # 4. Validate properties
             try:
                 check_idr_props_list(selected_props)
             except ValueError as e:
                 print(e)
                 return
 
-            # 5. Run query
-            results = query_by_cog_root(cog_id)
+            # 4. Architectures (optional)
+            arch_list, arch_err = parse_and_validate_arch_list(arch_input.value)
+            if arch_err:
+                print(arch_err)
+                return
+            if arch_list:
+                print("Architecture filter requested for:")
+                for a in arch_list:
+                    print(f"  - {a}")
 
+            # 5. Base query (single join, includes temps via LEFT JOIN)
+            print("Running query...")
+            results = query_by_cog_root(cog_id)
             if results is None or results.empty:
                 print(f"No results found for COG ID: {cog_id}")
                 return
 
             results = results.loc[:, ~results.columns.duplicated()].copy()
+            print(f"Retrieved {len(results)} rows after base join.")
 
-            # 6. Filter by selected datasets (if 'dataset' column exists)
+            # 6. Dataset filter
             if "dataset" not in results.columns:
                 print("Warning: 'dataset' column not found; cannot filter by dataset.")
-            else:
-                results = results[results["dataset"].isin(selected_datasets)].copy()
-                if results.empty:
+                return
+
+            results = results[results["dataset"].isin(selected_datasets)].copy()
+            if results.empty:
+                print(
+                    "No results found for COG ID "
+                    f"{cog_id} in selected dataset(s): "
+                    f"{', '.join(selected_datasets)}"
+                )
+                return
+
+            print(f"{len(results)} rows remain after dataset filter.")
+
+            # 7. Min IDR length filter
+            min_len = idr_length_input.value
+            if isinstance(min_len, int) and min_len > 0:
+                if "Length" not in results.columns:
                     print(
-                        "No results found for COG ID "
-                        f"{cog_id} in selected dataset(s): "
-                        f"{', '.join(selected_datasets)}"
+                        "Min IDR length specified, but 'Length' column was not found."
                     )
                     return
 
-            # 7. Coerce selected properties to numeric
+                results["Length"] = pd.to_numeric(results["Length"], errors="coerce")
+                before = len(results)
+                results = results[results["Length"] >= min_len].copy()
+
+                if results.empty:
+                    print(f"No IDRs with Length ≥ {min_len} after filtering.")
+                    return
+
+                print(
+                    f"Applied Length ≥ {min_len} filter: "
+                    f"{before} → {len(results)} rows."
+                )
+            else:
+                print("No minimum IDR length filter applied.")
+
+            # 8. Architecture filter
+            if arch_list:
+                if "architecture" not in results.columns:
+                    print(
+                        "Architecture filter requested, but 'architecture' column not found."
+                    )
+                    return
+
+                before = len(results)
+                results = results[results["architecture"].isin(arch_list)].copy()
+
+                if results.empty:
+                    print(
+                        "No entries matched the requested architecture(s): "
+                        + ", ".join(arch_list)
+                    )
+                    return
+
+                print(
+                    f"Applied architecture filter: {before} → {len(results)} rows "
+                    f"matching {', '.join(arch_list)}."
+                )
+            else:
+                print("No architecture filter applied.")
+
+            # 9. Temperature-based Tara Oceans filter (omrgcv2 only)
+            min_T = parse_float_or_none(min_temp_input.value)
+            max_T = parse_float_or_none(max_temp_input.value)
+
+            temp_filter_active = False
+
+            if (
+                min_T is not None
+                and max_T is not None
+                and min_T < max_T
+                and "omrgcv2" in selected_datasets
+            ):
+                print(
+                    f"Applying Tara Oceans temperature bins for omrgcv2:"
+                    f" cold: max_temperature < {min_T},"
+                    f" warm: min_temperature > {max_T}"
+                )
+
+                if "min_temperature" not in results.columns or "max_temperature" not in results.columns:
+                    print(
+                        "Temperature filter requested, but 'min_temperature' / "
+                        "'max_temperature' columns not found in results."
+                    )
+                else:
+                    # Split omrgcv2 vs others
+                    omrg_mask = results["dataset"] == "omrgcv2"
+                    omrg_df = results[omrg_mask].copy()
+                    other_df = results[~omrg_mask].copy()
+
+                    if not omrg_df.empty:
+                        # Ensure numeric & drop missing
+                        omrg_df["min_temperature"] = pd.to_numeric(
+                            omrg_df["min_temperature"], errors="coerce"
+                        )
+                        omrg_df["max_temperature"] = pd.to_numeric(
+                            omrg_df["max_temperature"], errors="coerce"
+                        )
+                        omrg_df = omrg_df.dropna(
+                            subset=["min_temperature", "max_temperature"]
+                        )
+
+                        cold_df = omrg_df[
+                            omrg_df["max_temperature"] < min_T
+                        ].copy()
+                        warm_df = omrg_df[
+                            omrg_df["min_temperature"] > max_T
+                        ].copy()
+
+                        # (Optional) ensure unique by Gene across bins
+                        if "Gene" in omrg_df.columns:
+                            cold_genes = set(cold_df["Gene"])
+                            warm_genes = set(warm_df["Gene"])
+                            overlap = cold_genes & warm_genes
+                            if overlap:
+                                cold_df = cold_df[~cold_df["Gene"].isin(overlap)]
+                                warm_df = warm_df[~warm_df["Gene"].isin(overlap)]
+
+                        if cold_df.empty and warm_df.empty:
+                            print(
+                                "No omrgcv2 proteins fall into cold or warm bins; "
+                                "omrgcv2 entries will be dropped, others retained."
+                            )
+                            results = other_df
+                        else:
+                            if not cold_df.empty:
+                                cold_df["temp_bin"] = f"< {min_T}°C"
+                                print(f"Cold-bin omrgcv2 rows: {len(cold_df)}")
+                            if not warm_df.empty:
+                                warm_df["temp_bin"] = f"> {max_T}°C"
+                                print(f"Warm-bin omrgcv2 rows: {len(warm_df)}")
+
+                            binned = pd.concat(
+                                [d for d in (cold_df, warm_df) if not d.empty],
+                                ignore_index=True
+                            )
+                            results = pd.concat(
+                                [other_df, binned],
+                                ignore_index=True
+                            )
+                            temp_filter_active = True
+                            print(
+                                f"After temperature binning: total rows = {len(results)}"
+                            )
+                    else:
+                        print(
+                            "No omrgcv2 rows present after previous filters; "
+                            "temperature filter has no effect."
+                        )
+            else:
+                if min_T is None and max_T is None:
+                    print("No temperature filter applied.")
+                elif "omrgcv2" not in selected_datasets:
+                    print("Temperature values provided but omrgcv2 not selected; ignoring.")
+                else:
+                    print(
+                        "Temperature filter not applied: please provide both Min and Max with Min < Max."
+                    )
+
+            if results.empty:
+                print("No results left after applying all filters.")
+                return
+
+            # 10. Coerce selected props numeric
             for col in selected_props:
                 if col in results.columns:
-                    results[col] = pd.to_numeric(results[col], errors='coerce')
+                    results[col] = pd.to_numeric(results[col], errors="coerce")
 
-            # 8. Summaries
-            print(f"{len(results)} unique IDRs retrieved after filtering.\n")
-
+            # 11. Summary + preview
+            print(f"\nFinal row count: {len(results)}")
             if "dataset" in results.columns:
-                print("Number of IDRs per dataset:")
-                print(results["dataset"].value_counts(), "\n")
-
-            # Preview
+                print("\nNumber of IDRs per dataset:")
+                print(results["dataset"].value_counts())
+                print("")
+            print("Preview of filtered results:")
             display(results.head())
 
-            # 9. Plots
-            try:
-                plot_idr_property_boxplots2(results, properties=selected_props)
-            except Exception as e:
-                print("\nPlotting error:", e)
+            # 12. Plots
+            if temp_filter_active and "temp_bin" in results.columns:
+                # Build a unified grouping column:
+                # - binned omrgcv2 use temp_bin labels
+                # - all other rows use their dataset label
+                plot_df = results.copy()
 
-            # 10. Store results for export
+                if "dataset" not in plot_df.columns:
+                    print("Plotting error: 'dataset' column missing.")
+                else:
+                    # Initialize with dataset
+                    plot_df["plot_group"] = plot_df["dataset"].astype(str)
+
+                    # Overwrite with temp_bin where available (for binned omrgcv2 rows)
+                    mask_binned = plot_df["temp_bin"].notna()
+                    plot_df.loc[mask_binned, "plot_group"] = plot_df.loc[mask_binned, "temp_bin"].astype(str)
+
+                    print(
+                        "\nPlotting IDR properties by group, where:\n"
+                        f"  - Tara Oceans (omrgcv2) entries are split into bins via temp_bin\n"
+                        f"  - Other datasets are shown by their dataset name\n"
+                    )
+
+                    try:
+                        plot_idr_property_boxplots2(
+                            plot_df,
+                            properties=selected_props,
+                            group_col="plot_group"
+                        )
+                    except Exception as e:
+                        print("\nPlotting error (plot_group):", e)
+            else:
+                # Standard dataset-based plots
+                if "dataset" not in results.columns:
+                    print("Plotting error: 'dataset' column missing.")
+                else:
+                    try:
+                        plot_idr_property_boxplots2(
+                            results,
+                            properties=selected_props,
+                            group_col="dataset"
+                        )
+                    except Exception as e:
+                        print("\nPlotting error (dataset):", e)
+
+            # 13. Store results
             LAST_RESULTS = results
+            print("\nResults stored in LAST_RESULTS.")
 
     run_button.on_click(on_run_clicked)
 
@@ -304,216 +576,14 @@ def create_idr_ui():
         cog_input,
         widgets.HTML("<b>Select dataset(s):</b>"),
         dataset_box,
-        widgets.HTML("<b>Select IDR properties:</b>"),
-        props_box,
-        run_button,
-        output
-    ])
-
-    return ui
-
-def create_omrgcv2_temp_ui():
-    """
-    UI for:
-      - omrgcv2 only
-      - OPTIONAL COG ID filter
-      - select IDR properties
-      - select min/max temperature thresholds
-      - compare proteins uniquely in cold vs warm bins
-    """
-    instructions = widgets.HTML(
-        "<b>Instructions:</b> "
-        "1) (Optional) Enter a COG ID to restrict the analysis.<br>"
-        "2) Select IDR properties.<br>"
-        "3) Enter a minimum and maximum temperature (°C).<br>"
-        "4) Click <i>'Run temperature-based query'</i>."
-    )
-
-    # ---- Optional COG ID input ----
-    cog_input = widgets.Text(
-        description="COG ID:",
-        placeholder="(leave blank for all COGs)",
-        layout=widgets.Layout(width="260px")
-    )
-
-    # ---- IDR property selection ----
-    prop_checkboxes = [
-        widgets.Checkbox(
-            value=(prop in DEFAULT_SELECTED),
-            description=prop,
-            indent=False
-        )
-        for prop in MASTER_IDR_PROPS
-    ]
-    props_box = widgets.VBox(prop_checkboxes)
-
-    # ---- Temperature inputs ----
-    min_temp_input = widgets.FloatText(
-        description="Min T (°C):",
-        value=5.0,
-        layout=widgets.Layout(width="220px")
-    )
-
-    max_temp_input = widgets.FloatText(
-        description="Max T (°C):",
-        value=25.0,
-        layout=widgets.Layout(width="220px")
-    )
-
-    # ---- Run button + output ----
-    run_button = widgets.Button(
-        description="▶ Run temperature-based query",
-        button_style="primary",
-        layout=widgets.Layout(width="300px")
-    )
-
-    output = widgets.Output()
-
-    def on_run_clicked(b):
-        global LAST_RESULTS
-        with output:
-            clear_output()
-
-            # 1) Selected properties
-            selected_props = [cb.description for cb in prop_checkboxes if cb.value]
-            if not selected_props:
-                print("Please select at least one IDR property.")
-                return
-
-            try:
-                check_idr_props_list(selected_props)
-            except ValueError as e:
-                print(e)
-                return
-
-            # 2) Temperatures
-            try:
-                min_T = float(min_temp_input.value)
-                max_T = float(max_temp_input.value)
-            except Exception:
-                print("Please enter numeric values for temperatures.")
-                return
-
-            if min_T >= max_T:
-                print("Minimum temperature must be less than maximum temperature.")
-                return
-
-            # 3) Base query: omrgcv2 only + joins
-            df = query_omrgcv2_with_temps()
-            if df is None or df.empty:
-                print("No records found for omrgcv2 with temperatures.")
-                return
-
-            df = df.loc[:, ~df.columns.duplicated()].copy()
-
-            # 4) Optional COG filter
-            cog_id = cog_input.value.strip()
-            if cog_id:
-                if "cog_root_ids" not in df.columns:
-                    print("COG filter requested, but 'cog_root_ids' column not found.")
-                    return
-                df = df[df["cog_root_ids"] == cog_id].copy()
-                if df.empty:
-                    print(f"No records found for omrgcv2 with COG ID '{cog_id}'.")
-                    return
-
-            # 5) Check temperature columns
-            # Adjust names here if your tara_temperatures table uses different ones
-            temp_cols = ["min_temperature", "max_temperature"]
-            for col in temp_cols:
-                if col not in df.columns:
-                    print(f"Expected temperature column '{col}' not found.")
-                    return
-
-            for col in temp_cols:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
-
-            df = df.dropna(subset=temp_cols)
-            if df.empty:
-                print("No entries with valid min_T and max_T after cleaning.")
-                return
-
-            # 6) Define disjoint bins:
-            # cold-only: max_T < min_T_threshold
-            # warm-only: min_T > max_T_threshold
-            below_min_df = df[df["max_temperature"] < min_T].copy()
-            above_max_df = df[df["min_temperature"] > max_T].copy()
-
-            # Ensure uniqueness if needed (by Gene)
-            if "Gene" in df.columns:
-                below_genes = set(below_min_df["Gene"])
-                above_genes = set(above_max_df["Gene"])
-                overlap = below_genes & above_genes
-                if overlap:
-                    below_min_df = below_min_df[~below_min_df["Gene"].isin(overlap)]
-                    above_max_df = above_max_df[~above_max_df["Gene"].isin(overlap)]
-
-            if below_min_df.empty and above_max_df.empty:
-                msg = (
-                    "No proteins found that are uniquely in cold (< {min_T}°C) or "
-                    "warm (> {max_T}°C) bins."
-                )
-                print(msg.format(min_T=min_T, max_T=max_T))
-                return
-
-            # 7) Label bins
-            if not below_min_df.empty:
-                below_min_df["temp_bin"] = f"< {min_T}°C"
-            if not above_max_df.empty:
-                above_max_df["temp_bin"] = f"> {max_T}°C"
-
-            combined = pd.concat(
-                [d for d in (below_min_df, above_max_df) if not d.empty],
-                ignore_index=True
-            )
-
-            # 8) Coerce selected IDR props to numeric
-            for col in selected_props:
-                if col in combined.columns:
-                    combined[col] = pd.to_numeric(combined[col], errors="coerce")
-
-            # 9) Report + preview
-            title_bits = []
-            if cog_id:
-                title_bits.append(f"COG ID = {cog_id}")
-            title_bits.append("dataset = omrgcv2")
-            print("Filtered on " + ", ".join(title_bits) + "\n")
-
-            if not below_min_df.empty:
-                print(f"Proteins only in cold bin (< {min_T}°C): {len(below_min_df)}")
-            if not above_max_df.empty:
-                print(f"Proteins only in warm bin (> {max_T}°C): {len(above_max_df)}")
-            print()
-
-            cols_to_show = []
-            for c in ["Gene", "cog_root_ids", "temp_bin"]:
-                if c in combined.columns:
-                    cols_to_show.append(c)
-            cols_to_show += [c for c in selected_props if c in combined.columns]
-
-            display(combined[cols_to_show].head())
-
-            # 10) Plots: compare selected props across temp bins
-            try:
-                plot_idr_property_boxplots2(
-                    combined,
-                    properties=selected_props,
-                    group_col="temp_bin"
-                )
-            except Exception as e:
-                print("\nPlotting error:", e)
-
-            # 11) Store for export
-            LAST_RESULTS = combined
-
-    run_button.on_click(on_run_clicked)
-
-    ui = widgets.VBox([
-        instructions,
-        cog_input,
-        widgets.HTML("<b>Select IDR properties:</b>"),
-        props_box,
+        widgets.HTML("<b>Optional: set minimum IDR length:</b>"),
+        idr_length_input,
+        widgets.HTML("<b>Optional: filter by architecture (comma-separated):</b>"),
+        arch_input,
+        widgets.HTML("<b>Optional: Tara Oceans (omrgcv2) temperature bins:</b>"),
         widgets.HBox([min_temp_input, max_temp_input]),
+        widgets.HTML("<b>Select IDR properties:</b>"),
+        props_box,
         run_button,
         output
     ])

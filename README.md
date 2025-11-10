@@ -1,7 +1,9 @@
 ### TO DO LIST
 
-1. Add IDR length filter
-2. Add Tara temperature filter to global comparison set
+1. Add IDR length filter (DONE)
+2. Add Tara temperature filter to global comparison set (DONE)
+3. Add architecture filter (DONE)
+4. Add multiple hypothesis test correction for p-values
 
 # Query the ocean IDR database
 
