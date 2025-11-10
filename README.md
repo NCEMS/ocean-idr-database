@@ -3,7 +3,7 @@
 1. Add IDR length filter (DONE)
 2. Add Tara temperature filter to global comparison set (DONE)
 3. Add architecture filter (DONE)
-4. Add multiple hypothesis test correction for p-values
+4. Add multiple hypothesis test correction for p-values (DONE)
 
 # Query the ocean IDR database
 
@@ -84,4 +84,3 @@
 * Critical note: when you close your CyVerse session, all code and data in your working directory will be deleted forever. It is critical that you download your results to your local machine or copy them to your personal CyVerse storage if you want to use them again
   * You can download a file by right clicking on its name in the file explorer bar on the left and selecting `Download` from the dropdown menu
   * You can also use `gocmd` to copy data to your personal CyVerse storage. For example, if you have the output file `COG0513.csv` in your present working directory, you can run the command `gocmd put --progress COG0513.csv /iplant/home/{USERNAME}`, where you must replace `{USERNAME}` with your CyVerse username
-

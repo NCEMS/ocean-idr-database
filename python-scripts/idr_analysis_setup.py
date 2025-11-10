@@ -11,6 +11,7 @@ import seaborn as sns
 from IPython.display import display, clear_output
 import ipywidgets as widgets
 from scipy.stats import mannwhitneyu
+from statsmodels.stats.multitest import multipletests
 
 # --------------------
 # Config
@@ -93,22 +94,104 @@ def plot_idr_property_boxplots2(df: pd.DataFrame,
                                 group_col: str = "dataset",
                                 ncols: int = 4,
                                 figsize: tuple = (16, 10)):
+    """
+    Create subplots of boxplots for IDR properties grouped by `group_col`.
+    For each property, perform pairwise Mann–Whitney U tests between groups.
+
+    Apply Benjamini–Hochberg FDR correction across ALL pairwise comparisons
+    for ALL properties together.
+
+    - If any BH-adjusted p-value (q) for a property is < 0.05, its title is {prop}.
+    - Annotations show BH-adjusted p-values (q-values).
+    """
+
     if not properties:
         raise ValueError("No properties provided to plot.")
+    if group_col not in df.columns:
+        raise ValueError(f"Expected column '{group_col}' not found in results.")
 
+    groups = df[group_col].dropna().unique()
+    if len(groups) < 2:
+        raise ValueError(
+            f"Need at least 2 groups in '{group_col}' for statistical comparison; "
+            f"found {len(groups)}."
+        )
+
+    from itertools import combinations
+    pairs = list(combinations(groups, 2))
+
+    # --------------------
+    # First pass: compute all raw p-values
+    # --------------------
+    all_tests = []  # (prop, "A vs B", p)
+
+    for prop in properties:
+        if prop not in df.columns:
+            continue
+
+        for a, b in pairs:
+            group_a = df.loc[df[group_col] == a, prop].dropna()
+            group_b = df.loc[df[group_col] == b, prop].dropna()
+
+            if len(group_a) > 0 and len(group_b) > 0:
+                try:
+                    _, p = mannwhitneyu(group_a, group_b, alternative="two-sided")
+                except ValueError:
+                    # e.g., identical values or other numerical quirks
+                    continue
+                all_tests.append((prop, f"{a} vs {b}", float(p)))
+
+    # If no tests, just plot without stats
+    if not all_tests:
+        nplots = len(properties)
+        nrows = (nplots + ncols - 1) // ncols
+        fig, axes = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False)
+        axes = axes.flatten()
+
+        for i, prop in enumerate(properties):
+            ax = axes[i]
+            if prop not in df.columns:
+                ax.set_visible(False)
+                continue
+
+            sns.boxplot(data=df, x=group_col, y=prop, ax=ax, fliersize=1)
+            ax.set_xlabel("")
+            ax.set_ylabel(prop)
+            ax.tick_params(axis="x", rotation=45)
+            ax.set_title(prop)
+
+        for j in range(i + 1, len(axes)):
+            axes[j].set_visible(False)
+
+        fig.tight_layout()
+        plt.show()
+        return
+
+    # --------------------
+    # Benjamini–Hochberg FDR across all tests
+    # --------------------
+    raw_pvals = [t[2] for t in all_tests]
+    # multipletests returns: reject, pvals_corrected, alphacSidak, alphacBonf
+    _, qvals, _, _ = multipletests(raw_pvals, alpha=0.05, method="fdr_bh")
+
+    # Map (prop, comparison) -> q
+    qmap = {}
+    for (prop, comp, _p), q in zip(all_tests, qvals):
+        qmap[(prop, comp)] = q
+
+    # --------------------
+    # Plot with q-values
+    # --------------------
     nplots = len(properties)
     nrows = (nplots + ncols - 1) // ncols
     fig, axes = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False)
     axes = axes.flatten()
 
-    if group_col not in df.columns:
-        raise ValueError(f"Expected column '{group_col}' not found in results.")
-
-    datasets = df[group_col].dropna().unique()
-    pairs = list(combinations(datasets, 2)) if len(datasets) >= 2 else []
+    last_ax_index = -1
 
     for i, prop in enumerate(properties):
         ax = axes[i]
+        last_ax_index = i
 
         if prop not in df.columns:
             ax.set_visible(False)
@@ -119,32 +202,44 @@ def plot_idr_property_boxplots2(df: pd.DataFrame,
         ax.set_ylabel(prop)
         ax.tick_params(axis="x", rotation=45)
 
-        pvals = {}
-        significant = False
-        for a, b in pairs:
-            group_a = df.loc[df[group_col] == a, prop].dropna()
-            group_b = df.loc[df[group_col] == b, prop].dropna()
-            if len(group_a) > 0 and len(group_b) > 0:
-                _, p = mannwhitneyu(group_a, group_b, alternative="two-sided")
-                p_formatted = "<0.001" if p < 0.001 else f"{p:.3f}"
-                pvals[f"{a} vs {b}"] = p_formatted
-                if p < 0.05:
-                    significant = True
+        # Get this property's q-values
+        prop_qvals = {
+            comp: q
+            for (p, comp), q in qmap.items()
+            if p == prop
+        }
 
+        # Mark title if any q < 0.05
+        significant = any(q < 0.05 for q in prop_qvals.values())
         title = f"{{{prop}}}" if significant else prop
         ax.set_title(title)
 
-        if 0 < len(pvals) <= 3:
-            text = "\n".join([f"{k}: p={v}" for k, v in pvals.items()])
-            ax.text(0.05, 0.95, text, transform=ax.transAxes,
-                    fontsize=8, va="top", ha="left",
-                    bbox=dict(boxstyle="round", facecolor="white", alpha=0.6))
-        elif len(pvals) > 3:
-            print(f"\n{prop}:")
-            for k, v in pvals.items():
-                print(f"  {k}: p={v}")
+        # Annotate if reasonable number of comparisons
+        if prop_qvals:
+            if len(prop_qvals) <= 3:
+                lines = []
+                for comp, q in sorted(prop_qvals.items()):
+                    q_str = "<0.001" if q < 0.001 else f"{q:.3f}"
+                    lines.append(f"{comp}: q={q_str}")
+                ax.text(
+                    0.05,
+                    0.95,
+                    "\n".join(lines),
+                    transform=ax.transAxes,
+                    fontsize=8,
+                    va="top",
+                    ha="left",
+                    bbox=dict(boxstyle="round", facecolor="white", alpha=0.6),
+                )
+            else:
+                # Too many comparisons; print to stdout to avoid clutter
+                print(f"\nBH-FDR q-values for {prop}:")
+                for comp, q in sorted(prop_qvals.items()):
+                    q_str = "<0.001" if q < 0.001 else f"{q:.3f}"
+                    print(f"  {comp}: q={q_str}")
 
-    for j in range(i + 1, len(axes)):
+    # Hide unused axes
+    for j in range(last_ax_index + 1, len(axes)):
         axes[j].set_visible(False)
 
     fig.tight_layout()
