@@ -48,47 +48,87 @@ onto the command line and hit enter. Once this is done, run the command
 cd ocean-idr-database/
 ``` 
 
-and then proceed to step 3
+and then proceed to step 3.
 
 ### 3. Configuring `gocmd` and getting the database file
 
-* We need to upgrade and initialize `gocmd`, the command line utility we will use to copy the database to our working directory, and then use it to get our data. 
+We need to upgrade and initialize `gocmd`, the command line utility we will use to copy the database to our working directory, and then use it to get our data. 
 
-* First, run the command `sudo gocmd upgrade`
+First, run the command below in your Terminal session
 
-* Second, run the command `gocmd init`. You will be prompted for five pieces of information:
+```bash
+sudo gocmd upgrade
+```
+
+Second, run the command 
+
+```bash
+gocmd init
+```
+
+Upon running this command, you will be prompted to input five pieces of information in series on the command line:
   * (1) `iRODS Host [data.cyverse.org]`: hit enter to accept the default of `data.cyverse.org`
   * (2) `iRODS Port [1247]`: hit enter to accept the default of `1247`
   * (3) `iRODS Zone [iplant]`: hit enter to accept the default of `iplant`
   * (4) `iRODS Username`: type in your CyVerse username and then hit enter
   * (5) `iRODS Password`: type in your CyVerse password and then hit enter. Note well: you will not see your password or asterisks representing the characters you have entered, but your keystrokes are being recorded. 
 
-* Third, run the command `gocmd get --progress /iplant/home/shared/NCEMS/working-groups/oceans-of-disorder/minimal-database/minimal_noenv.db.gz .` to copy the data into your present working directory. 
+Third, run the command 
 
-* Finally, unpack the database by running the command `gunzip minimal_noenv.db.gz`; this may take up to 5 minutes
+```bash
+gocmd get --progress /iplant/home/shared/NCEMS/working-groups/oceans-of-disorder/minimal-database/minimal_noenv.db.gz .
+``` 
+
+to copy the data into your present working directory. 
+
+Finally, unpack the database by running the command 
+
+```bash
+gunzip minimal_noenv.db.gz
+```
+
+This final step may take up to 5 minutes
 
 ### 4. Making a query
 
-* The file explorer on the left does not synchronize itself with your terminal session, so we first need to enter the repository root directory by double clicking on `ocean-idr-database`
+The file explorer on the left does not synchronize itself with your terminal session, so we first need to enter the repository root directory by double clicking on `ocean-idr-database`
 ![Enter repo directory](images/enter-repo-directory.png)
 
-* You should now see two directories and three files in the file explorer:
+You should now see two directories and three files in the file explorer:
   * `images`: folder containing the images rendered in this README
   * `python-scripts`: folder containing the Python code loaded by `query-database.ipynb` to enable its functionality
   * `minimal_noenv.db`: the SQLite database file we will query
   * `query-database.ipynb`: the Jupyter Notebook file we will use to carry out a query
   * `README.md`: the README file you are reading now
 
-* Double click on `query-database.ipynb` in the file explorer bar to open it
+Double click on `query-database.ipynb` in the file explorer bar to open it
 
-* Follow the instructions in the notebook itself to run your query and save the results to a .csv file. 
+Follow the instructions in the notebook itself to run your query and save the results to a .csv file. 
 
-* Critical note: when you close your CyVerse session, all code and data in your working directory will be deleted forever. It is critical that you download your results to your local machine or copy them to your personal CyVerse storage if you want to use them again
-  * You can download a file by right clicking on its name in the file explorer bar on the left and selecting `Download` from the dropdown menu
-  * You can also use `gocmd` to copy data to your personal CyVerse storage. For example, if you have the output file `COG0513.csv` in your present working directory, you can run the command `gocmd put --progress COG0513.csv /iplant/home/{USERNAME}`, where you must replace `{USERNAME}` with your CyVerse username
+**Critical note**: when you close your CyVerse session, all code and data in your working directory will be deleted forever. It is critical that you download your results to your local machine or copy them to your personal CyVerse storage if you want to use them again. 
+
+You can download a file by right clicking on its name in the file explorer bar on the left and selecting `Download` from the dropdown menu
+
+You can also use `gocmd` to copy data to your personal CyVerse storage. For example, if you have the output file `COG0513.csv` in your present working directory, you can run the command 
+
+```bash
+gocmd put --progress COG0513.csv /iplant/home/{USERNAME}
+```
+in which you must replace `{USERNAME}` with your CyVerse username
 
 ### 5. (OPTIONAL) Extracting IDR sequences
 
-* If desired, you can use the helper script `python-scripts/extract-IDR-sequences.py` to convert the .csv format output file to a FASTA file with each IDR sequence from your query.
-* For example, if you have an output file from `query-database.py` named `COG0513-OM-RGC.v2-3300003178.csv`, you can create the .fasta file `COG0513-OM-RGC.v2-3300003178.fasta` with the command `python python-scripts/extract-IDR-sequences.py --input COG0513-OM-RGC.v2-3300003178.csv --output COG0513-OM-RGC.v2-3300003178.fasta` (Note well - this example command expects you to be in the repository root directory and the file `COG0513-OM-RGC.v2-3300003178.csv` to be in the same directory.)
-* The description field in the output .fasta file will correspond to the `IDR_ID` field of the input .csv file
+If desired, you can use the helper script `python-scripts/extract-IDR-sequences.py` to convert the .csv format output file to a FASTA file with each IDR sequence from your query.
+
+For example, if you have an output file from `query-database.py` named `COG0513-OM-RGC.v2-3300003178.csv`, you can create the .fasta file `COG0513-OM-RGC.v2-3300003178.fasta` by running the command 
+
+```bash
+python python-scripts/extract-IDR-sequences.py --input COG0513-OM-RGC.v2-3300003178.csv --output COG0513-OM-RGC.v2-3300003178.fasta
+``` 
+
+in your Terminal session.
+
+**Note well** - this example command expects you to be in the repository root directory and the file `COG0513-OM-RGC.v2-3300003178.csv` to be in the same directory.)
+
+The description field in the output .fasta file will correspond to the `IDR_ID` field of the input .csv file
+
