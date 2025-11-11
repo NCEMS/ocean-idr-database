@@ -84,3 +84,9 @@
 * Critical note: when you close your CyVerse session, all code and data in your working directory will be deleted forever. It is critical that you download your results to your local machine or copy them to your personal CyVerse storage if you want to use them again
   * You can download a file by right clicking on its name in the file explorer bar on the left and selecting `Download` from the dropdown menu
   * You can also use `gocmd` to copy data to your personal CyVerse storage. For example, if you have the output file `COG0513.csv` in your present working directory, you can run the command `gocmd put --progress COG0513.csv /iplant/home/{USERNAME}`, where you must replace `{USERNAME}` with your CyVerse username
+
+### 5. (OPTIONAL) Extracting IDR sequences
+
+* If desired, you can use the helper script `python-scripts/extract-IDR-sequences.py` to convert the .csv format output file to a FASTA file with each IDR sequence from your query.
+* For example, if you have an output file from `query-database.py` named `COG0513-OM-RGC.v2-3300003178.csv`, you can create the .fasta file `COG0513-OM-RGC.v2-3300003178.fasta` with the command `python python-scripts/extract-IDR-sequences.py --input COG0513-OM-RGC.v2-3300003178.csv --output COG0513-OM-RGC.v2-3300003178.fasta` (Note well - this example command expects you to be in the repository root directory and the file `COG0513-OM-RGC.v2-3300003178.csv` to be in the same directory.)
+* The description field in the output .fasta file will correspond to the `IDR_ID` field of the input .csv file
