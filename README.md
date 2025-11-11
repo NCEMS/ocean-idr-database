@@ -128,7 +128,7 @@ python python-scripts/extract-IDR-sequences.py --input COG0513-OM-RGC.v2-3300003
 
 in your Terminal session.
 
-**Note well** - this example command expects you to be in the repository root directory and the file `COG0513-OM-RGC.v2-3300003178.csv` to be in the same directory.)
+**Note well** - this example command expects you to be in the repository root directory and the file `COG0513-OM-RGC.v2-3300003178.csv` to be in the same directory.
 
 The description field in the output .fasta file will correspond to the `IDR_ID` field of the input .csv file
 
