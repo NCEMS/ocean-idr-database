@@ -56,7 +56,7 @@ def parse_list_field(value, colname, row_idx):
 def main():
     args = get_args()
 
-    df = pd.read_csv(args.input)
+    df = pd.read_csv(args.input, comment="#")
 
     required_cols = [
         "IDR_ID",

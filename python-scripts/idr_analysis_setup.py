@@ -4,7 +4,7 @@ import os
 import sqlite3
 from itertools import combinations
 from typing import List
-
+from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -44,10 +44,24 @@ DEFAULT_SELECTED = {
 }
 
 LAST_RESULTS = None
+LAST_PARAMS  = None
 
 # --------------------
 # Core helpers
 # --------------------
+
+def get_last_params():
+    return LAST_PARAMS or {}
+
+def _safe_concat(dfs, **kwargs):
+    """Concat after dropping empty/None and aligning columns to avoid FutureWarning."""
+    dfs = [d for d in dfs if d is not None and hasattr(d, "empty") and not d.empty]
+    if not dfs:
+        return pd.DataFrame()
+    # align columns to the union so no all-NA columns sneak in differently-typed
+    cols = sorted(set().union(*(d.columns for d in dfs)))
+    dfs = [d.reindex(columns=cols) for d in dfs]
+    return pd.concat(dfs, **kwargs)
 
 def run_query(query: str, params: tuple = ()) -> pd.DataFrame:
     with sqlite3.connect(DB_PATH) as conn:
@@ -381,7 +395,7 @@ def create_idr_ui():
 
     # ---- Callback ----
     def on_run_clicked(b):
-        global LAST_RESULTS
+        global LAST_RESULTS, LAST_PARAMS
         with output:
             clear_output()
 
@@ -569,11 +583,11 @@ def create_idr_ui():
                                 warm_df["temp_bin"] = f"> {max_T}°C"
                                 print(f"Warm-bin omrgcv2 rows: {len(warm_df)}")
 
-                            binned = pd.concat(
+                            binned = _safe_concat(
                                 [d for d in (cold_df, warm_df) if not d.empty],
                                 ignore_index=True
                             )
-                            results = pd.concat(
+                            results = _safe_concat(
                                 [other_df, binned],
                                 ignore_index=True
                             )
@@ -661,7 +675,26 @@ def create_idr_ui():
 
             # 13. Store results
             LAST_RESULTS = results
-            print("\nResults stored in LAST_RESULTS.")
+            LAST_PARAMS = _collect_current_params_for_save()
+            try:
+                LAST_RESULTS.attrs["idr_params"] = LAST_PARAMS
+            except Exception:
+                pass
+            print("\nResults stored in LAST_RESULTS (and parameters captured for saving).")
+
+    def _collect_current_params_for_save():
+        selected_datasets = [cb.description for cb in dataset_checkboxes if cb.value]
+        selected_props    = [cb.description for cb in prop_checkboxes if cb.value]
+        return {
+            "query_datetime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "cog_id": cog_input.value.strip(),
+            "datasets": ", ".join(selected_datasets),
+            "min_idr_length": str(idr_length_input.value),
+            "architectures": arch_input.value.strip(),
+            "min_temperature": min_temp_input.value.strip(),
+            "max_temperature": max_temp_input.value.strip(),
+            "selected_properties": ", ".join(selected_props),
+        }
 
     run_button.on_click(on_run_clicked)
 
