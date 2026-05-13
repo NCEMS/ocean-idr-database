@@ -1,6 +1,6 @@
 # Query the ocean IDR database
 
-This GitHub repository enables easy searching of the SQLite database `minimal_noenv.db` using a Jupyter notebook.
+This GitHub repository enables easy searching of the SQLite database `minimal_noenv-12May2026.db` using a Jupyter notebook.
 
 While this repository is public, the database required to run a query is access controlled via CyVerse. Contact Dan Nissley (dan182@psu.edu) for access. 
 
@@ -55,9 +55,10 @@ and then proceed to step 3.
 Note: You can automate each of the below commands by executing the Bash script cyverse-setup.sh:
 
 ```bash
-cd ocean-idr-database/
 bash cyverse-setup.sh
 ```
+
+Note that you will still need to follow the instructions below when prompted to enter information by `gocmd`
 
 We need to upgrade and initialize `gocmd`, the command line utility we will use to copy the database to our working directory, and then use it to get our data. 
 
