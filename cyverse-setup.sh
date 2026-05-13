@@ -3,7 +3,7 @@ sudo gocmd upgrade
 echo "Initializing gocmd..."
 gocmd init
 echo "Getting the database..."
-gocmd get --progress /iplant/home/shared/NCEMS/working-groups/oceans-of-disorder/minimal-database/minimal_noenv.db.gz .
+gocmd get --progress /iplant/home/shared/NCEMS/working-groups/oceans-of-disorder/minimal-database/minimal_noenv-12May2026.db.gz .
 echo "Unpacking the database..."
-gunzip minimal_noenv.db.gz
+gunzip minimal_noenv-12May2026.db.gz
 echo "DONE."

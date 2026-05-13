@@ -6,7 +6,7 @@ While this repository is public, the database required to run a query is access 
 
 ## Getting started
 
-### 1. Kicking off a CyVerse session
+### 1. Kick off a CyVerse session
 
 Navigate to the CyVerse discovery environment `de.cyverse.org` on your preferred web browser
 
@@ -50,7 +50,14 @@ cd ocean-idr-database/
 
 and then proceed to step 3.
 
-### 3. Configuring `gocmd` and getting the database file
+### 3. Configure `gocmd` and get the database file
+
+Note: You can automate each of the below commands by executing the Bash script cyverse-setup.sh:
+
+```bash
+cd ocean-idr-database/
+bash cyverse-setup.sh
+```
 
 We need to upgrade and initialize `gocmd`, the command line utility we will use to copy the database to our working directory, and then use it to get our data. 
 
@@ -76,7 +83,7 @@ Upon running this command, you will be prompted to input five pieces of informat
 Third, run the command 
 
 ```bash
-gocmd get --progress /iplant/home/shared/NCEMS/working-groups/oceans-of-disorder/minimal-database/minimal_noenv.db.gz .
+gocmd get --progress /iplant/home/shared/NCEMS/working-groups/oceans-of-disorder/minimal-database/minimal_noenv-12May2026.db.gz .
 ``` 
 
 to copy the data into your present working directory. 
@@ -84,12 +91,12 @@ to copy the data into your present working directory.
 Finally, unpack the database by running the command 
 
 ```bash
-gunzip minimal_noenv.db.gz
+gunzip minimal_noenv-12May2026.db.gz
 ```
 
-This final step may take up to 5 minutes
+This final step may take up to 20 minutes
 
-### 4. Making a query
+### 4. Query the database
 
 The file explorer on the left does not synchronize itself with your terminal session, so we first need to enter the repository root directory by double clicking on `ocean-idr-database`
 ![Enter repo directory](images/enter-repo-directory.png)
@@ -97,9 +104,10 @@ The file explorer on the left does not synchronize itself with your terminal ses
 You should now see two directories and three files in the file explorer:
   * `images`: folder containing the images rendered in this README
   * `python-scripts`: folder containing the Python code loaded by `query-database.ipynb` to enable its functionality
-  * `minimal_noenv.db`: the SQLite database file we will query
+  * `minimal_noenv-12May2026.db`: the SQLite database file we will query
   * `query-database.ipynb`: the Jupyter Notebook file we will use to carry out a query
   * `README.md`: the README file you are reading now
+  * `cyverse-setup.sh`: an optional helper script that automates CyVerse setup (see top of 3.)
 
 Double click on `query-database.ipynb` in the file explorer bar to open it
 
@@ -126,9 +134,8 @@ For example, if you have an output file from `query-database.py` named `COG0513-
 python python-scripts/extract-IDR-sequences.py --input COG0513-OM-RGC.v2-3300003178.csv --output COG0513-OM-RGC.v2-3300003178.fasta
 ``` 
 
-in your Terminal session.
+in the Terminal of your session.
 
 **Note well** - this example command expects you to be in the repository root directory and the file `COG0513-OM-RGC.v2-3300003178.csv` to be in the same directory.
 
 The description field in the output .fasta file will correspond to the `IDR_ID` field of the input .csv file
-
